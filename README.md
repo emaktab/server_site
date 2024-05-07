@@ -9,7 +9,7 @@ IP: **26.50.23.144:25565**
 
 Через **Radmin VPN**!
 
-Логин:** MinecraftMineArtur**
+Логин: **MinecraftMineArtur**
 
 Пороль: **MINE MINE**
 
