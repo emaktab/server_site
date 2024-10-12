@@ -7,8 +7,8 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import threading
 import time
 
-# Инициализация бота
-TOKEN = '7666340013:AAFyx5erqTZ2xLPE1pKkRt6zI7Qsr3SdVHg'  # Замените на новый токен после отзыва предыдущего
+# Получение токена из переменных окружения
+TOKEN = os.getenv('TOKEN')
 bot = telebot.TeleBot(TOKEN)
 
 # Чат ID целевой группы (замените на ваш chat_id)
