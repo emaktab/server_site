@@ -3,6 +3,8 @@ import telebot
 from telebot import types
 from datetime import datetime
 import time
+from bs4 import BeautifulSoup
+import json
 
 # API ключ Telegram-бота
 TELEGRAM_CHAT_ID = '-1002331953667'
@@ -22,6 +24,17 @@ def get_steam_sales():
     data = response.json()
     discounted_games = [item for item in data['specials']['items'] if item['discount_percent'] > 0]
     return discounted_games
+
+def fetch_game_description(game_id):
+    url = f'https://store.steampowered.com/app/{game_id}'
+    response = requests.get(url)
+    if response.status_code != 200:
+        print(f"Ошибка при получении страницы игры: {url}")
+        return ""
+
+    soup = BeautifulSoup(response.text, 'html.parser')
+    description_div = soup.find('div', class_='game_description_snippet')
+    return description_div.get_text(strip=True) if description_div else "Описание недоступно."
 
 def send_discounted_games(games):
     for game in games:
@@ -51,12 +64,14 @@ def send_discounted_games(games):
                 print(f"Ошибка при проверке URL изображения: {e}. Отправляем сообщение без изображения.")
                 image_url = None  # Если произошла ошибка, устанавливаем в None
 
+        game_description = fetch_game_description(game['id'])
         # Формируем сообщение
         message = (
             f"🎮 *{game['name']}*\n"
             f"🔥 Скидка: {game['discount_percent']}%\n"
             f"💰 Цена до: {game['original_price'] / 100:.2f} {game['currency']}\n"
             f"💸 Цена после: {game['final_price'] / 100:.2f} {game['currency']}\n"
+            f"\n{game_description}\n\n"
         )
 
         if 'discount_expiration' in game:
