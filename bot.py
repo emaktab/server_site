@@ -4,10 +4,15 @@ import os
 import requests
 from bs4 import BeautifulSoup
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+import threading
+import time
 
 # Инициализация бота
-TOKEN = '7666340013:AAFyx5erqTZ2xLPE1pKkRt6zI7Qsr3SdVHg'
+TOKEN = '7666340013:AAFyx5erqTZ2xLPE1pKkRt6zI7Qsr3SdVHg'  # Замените на новый токен после отзыва предыдущего
 bot = telebot.TeleBot(TOKEN)
+
+# Чат ID целевой группы (замените на ваш chat_id)
+GROUP_CHAT_ID = -1002331953667  # Пример: -1001234567890
 
 # Файл для хранения отправленных скидок
 DISCOUNTS_FILE = "discounts.json"
@@ -15,14 +20,14 @@ DISCOUNTS_FILE = "discounts.json"
 # Функция для загрузки данных о скидках
 def load_sent_discounts():
     if os.path.exists(DISCOUNTS_FILE):
-        with open(DISCOUNTS_FILE, "r") as file:
+        with open(DISCOUNTS_FILE, "r", encoding='utf-8') as file:
             return json.load(file)
     return []
 
 # Функция для сохранения данных о скидках
 def save_sent_discounts(discounts):
-    with open(DISCOUNTS_FILE, "w") as file:
-        json.dump(discounts, file)
+    with open(DISCOUNTS_FILE, "w", encoding='utf-8') as file:
+        json.dump(discounts, file, ensure_ascii=False, indent=4)
 
 # Загружаем отправленные скидки
 sent_discounts = load_sent_discounts()
@@ -34,8 +39,12 @@ def parse_game_description(url):
         soup = BeautifulSoup(response.text, 'html.parser')
 
         # Извлекаем описание по классу 'game_description_snippet'
-        description = soup.find('div', class_='game_description_snippet').get_text(strip=True)
-        return description
+        description_div = soup.find('div', class_='game_description_snippet')
+        if description_div:
+            description = description_div.get_text(strip=True)
+            return description
+        else:
+            return "Описание недоступно"
     except Exception as e:
         print(f"Ошибка при парсинге описания: {e}")
         return "Описание недоступно"
@@ -53,18 +62,22 @@ def send_discount(chat_id, game_name, discount, old_price, new_price, descriptio
 
         # Текст сообщения
         message_text = f"""
-🎮 {game_name}
-🔥 Скидка: {discount}%
-💰 Цена до: {old_price}
-💸 Цена после: {new_price}
+🎮 *{game_name}*
+🔥 Скидка: *{discount}%*
+💰 Цена до: *{old_price}*
+💸 Цена после: *{new_price}*
 
 {description}
 
-⏳ Скидка заканчивается: {discount_end}
+⏳ Скидка заканчивается: *{discount_end}*
         """
 
-        # Отправляем сообщение
-        bot.send_message(chat_id, message_text, reply_markup=markup)
+        # Отправляем сообщение с поддержкой Markdown
+        try:
+            bot.send_message(chat_id, message_text, reply_markup=markup, parse_mode='Markdown')
+            print(f"Отправлено: {game_name}")
+        except Exception as e:
+            print(f"Ошибка при отправке {game_name}: {e}")
 
         # Добавляем игру в список отправленных
         sent_discounts.append(game_name)
@@ -97,7 +110,7 @@ games = [
 # Обработчик команды /start
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.send_message(message.chat.id, "Привет! Я буду отправлять тебе скидки на игры!")
+    bot.send_message(message.chat.id, "Привет! Я буду отправлять скидки на игры!")
 
 # Обработчик команды /send_discounts для тестирования отправки скидок
 @bot.message_handler(commands=['send_discounts'])
@@ -114,5 +127,26 @@ def send_discounts(message):
             game['url']
         )
 
+# Функция для автоматической отправки скидок
+def scheduled_discount_sender():
+    while True:
+        print("Проверка и отправка скидок...")
+        for game in games:
+            send_discount(
+                GROUP_CHAT_ID,
+                game['name'],
+                game['discount'],
+                game['old_price'],
+                game['new_price'],
+                game['description_url'],
+                game['discount_end'],
+                game['url']
+            )
+        # Интервал между отправками (например, 24 часа)
+        time.sleep(86400)  # 86400 секунд = 24 часа
+
+# Запуск планировщика в отдельном потоке
+threading.Thread(target=scheduled_discount_sender, daemon=True).start()
+
 # Запуск бота
-bot.polling()
+bot.polling(none_stop=True)
