@@ -5,6 +5,7 @@ from datetime import datetime
 import time
 from bs4 import BeautifulSoup
 import json
+import os
 
 # API ключ Telegram-бота
 TELEGRAM_CHAT_ID = '-1002331953667'
@@ -12,9 +13,27 @@ TOKEN = '7666340013:AAFyx5erqTZ2xLPE1pKkRt6zI7Qsr3SdVHg'
 
 bot = telebot.TeleBot(TOKEN)
 
-# Множество для хранения отправленных ID игр
+# Файл для хранения данных о скидках
+DATA_FILE = 'sent_games.json'
+
+# Множество для хранения отправленных ID игр и словарь для хранения информации о скидках
 sent_game_ids = set()
 pinned_messages = {}
+
+def load_sent_games():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, 'r') as f:
+            data = json.load(f)
+            return set(data.get('sent_game_ids', [])), data.get('pinned_messages', {})
+    return set(), {}
+
+def save_sent_games():
+    data = {
+        'sent_game_ids': list(sent_game_ids),
+        'pinned_messages': pinned_messages
+    }
+    with open(DATA_FILE, 'w') as f:
+        json.dump(data, f)
 
 def get_steam_sales():
     response = requests.get('https://store.steampowered.com/api/featuredcategories')
@@ -71,7 +90,7 @@ def send_discounted_games(games):
             f"🔥 Скидка: {game['discount_percent']}%\n"
             f"💰 Цена до: {game['original_price'] / 100:.2f} {game['currency']}\n"
             f"💸 Цена после: {game['final_price'] / 100:.2f} {game['currency']}\n"
-            f"\n{game_description}\n\n"
+            f"\n👀 Описание игры:\n{game_description}\n\n"
         )
 
         if 'discount_expiration' in game:
@@ -109,6 +128,7 @@ def send_discounted_games(games):
 
                 sent_game_ids.add(game['id'])
                 print(f"Игра '{game['name']}' отправлена.")
+                save_sent_games()  # Сохраняем данные после отправки
                 break
 
             except telebot.apihelper.ApiException as e:
@@ -143,9 +163,12 @@ def check_discount_expiration():
                 if expiration_timestamp < datetime.now().timestamp():
                     bot.unpin_chat_message(TELEGRAM_CHAT_ID, message_id)
                     del pinned_messages[game_id]
+                    sent_game_ids.discard(game_id)  # Удаляем ID из отправленных
                     print(f"Сообщение для игры с ID {game_id} откреплено, так как срок действия скидки истек.")
 
 def main():
+    global sent_game_ids, pinned_messages
+    sent_game_ids, pinned_messages = load_sent_games()  # Загружаем данные при старте
     while True:
         try:
             games = get_steam_sales()
